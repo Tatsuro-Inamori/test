@@ -1,0 +1,82 @@
+# Commented out IPython magic to ensure Python compatibility.
+# モジュールの読み込み
+import pandas as pd
+from sklearn.model_selection import train_test_split
+# %matplotlib inline
+
+# csvファイルの読み込み
+df = pd.read_csv('customers_labeled.csv')
+# 確認する
+df.head(2)
+
+df_1 = df.dropna(axis=0)
+
+col = ['age_first_order',  'pages_visited_avg']
+
+x = df_1[col]
+t = df_1['high_revenue']
+
+# gender列は文字の列なのでダミー変数化。campaign列は文字列なので同様。
+dummy_1 = pd.get_dummies(df_1['gender'], drop_first = True, prefix='gender', prefix_sep='gender')
+dummy_2 = pd.get_dummies(df_1['campaign'], drop_first = True, prefix='campaign', prefix_sep='campaign')
+# dummy_3 = pd.get_dummies(df_1['ip_address_country'], drop_first = True, prefix='ip_address', prefix_sep='ip_address')
+
+x = pd.concat([x, dummy_1, dummy_2], axis = 1)
+x.head(5)
+
+from sklearn.ensemble import RandomForestClassifier
+x_train, x_test, y_train, y_test = train_test_split(x, t,
+                                                    test_size = 0.2 , random_state = 0)
+model = RandomForestClassifier(n_estimators = 200,
+                               random_state = 0)
+
+model.fit(x_train, y_train)
+
+print(model.score(x_train, y_train))
+print(model.score(x_test, y_test))
+
+importance = model.feature_importances_
+
+# 列との対応がわかりやすいようにシリーズ変換
+pd.Series(importance, index = x_train.columns)
+
+y_pred = model.predict(x_test)
+
+import pickle
+import gc
+import numpy as np
+import os
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
+import lightgbm as lgb
+
+print(confusion_matrix(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred, normalize = "all"))
+
+
+df_future = pd.read_csv('customers_unlabeled_prepared.csv')
+
+df_future_1 = df_future.dropna(axis=0)
+
+
+col = ['age_first_order',  'pages_visited_avg', 'customerID']
+
+x = df_future_1[col]
+
+# df_futureの様式を読み込めるように、学習用ファイルと同様の条件でダミー変数化。
+# gender列は文字の列なのでダミー変数化。campaign列は文字列なので同様。
+
+future_dummy_1 = pd.get_dummies(df_future_1['gender'], drop_first = True, prefix='gender', prefix_sep='gender')
+future_dummy_2 = pd.get_dummies(df_future_1['campaign'], drop_first = True, prefix='campaign', prefix_sep='campaign')
+
+future_x = pd.concat([x, future_dummy_1, future_dummy_2], axis = 1)
+future_x.head(5)
+
+future_x_2 = future_x[['age_first_order',"pages_visited_avg","gendergenderM","campaigncampaignTrue"]]
+future_id = future_x['customerID']
+
+future_y_pred = model.predict(future_x_2)
+
+
+df_submit = pd.DataFrame({"customerID" : future_x["customerID"], "result" : future_y_pred})
+display(df_submit.head(5))
+df_submit.to_csv("result_future_pred2", index = None)
